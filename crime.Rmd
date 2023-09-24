@@ -1,0 +1,377 @@
+---
+title: "Crime"
+author: "Corey Michaud"
+date: "`r Sys.Date()`"
+output: html_notebook
+---
+The data in this notebook was taken from https://data.lacity.org/Public-Safety/Crime-Data-from-2020-to-Present/2nrs-mtv8 and consists of crime data from Los Angeles, CA (2020-2023).
+
+All visualizations, statistics, and insights discussed are based on this dataset and time frame mentioned above only. The objective is to gain a comprehensive understanding of crime in Los Angeles through data exploration and visualization.
+
+# Loading Libraries
+
+```{r}
+# Libraries
+library(tidyverse)
+library(lubridate)
+```
+
+# Exploratory Data Analysis
+
+```{r}
+# Importing dataset
+crime <- read.csv("crime.csv")
+head(crime)
+```
+
+```{r}
+# Changing Date.Rptd and DATE.OCC to date format
+crime$Date.Rptd <- as.Date(crime$Date.Rptd, format = "%m/%d/%Y")
+crime$DATE.OCC <- as.Date(crime$DATE.OCC, format = "%m/%d/%Y")
+
+
+times_char <- sprintf("%04d", crime$TIME.OCC)
+datetime <- strptime(times_char, format = "%H%M")
+crime$TIME.OCC <- format(datetime, format = "%H:%M")
+
+head(crime)
+```
+
+```{r}
+# Finding dimension of crime dataset
+dim(crime)
+```
+This dataset has 788,767 rows and 28 columns.
+
+```{r}
+# Applying NA function to each column
+crime_is_na <- sapply(crime, function(x) sum(is.na(x)))
+crime_is_na[which(crime_is_na > 0)]
+```
+Premis.Cd has some missing values. Weapon.Used.Cd has so many missing values because not all recorded crimes involve a weapon, and Crm.Cd.2-4 have many missing values because they will only have a value if more than 1 crime was committed in the same instance. I will not be removing any rows that contain missing values because if I do, there will not be nearly as much data. As a result, I will account for missing values during statistical tests.
+
+### What are the different types of crimes recorded?
+
+```{r}
+# Finding length of crime list
+length(table(crime$Crm.Cd.Desc))
+```
+There are 138 different types of crimes that have been committed.
+
+```{r}
+# Sorting the number of occurrences for each crime
+sorted_crimes <- table(crime$Crm.Cd.Desc) %>% sort(decreasing = TRUE)
+```
+There are too many crimes to print out the name of each one, but if you'd like you can download this rmd and print the sorted_crimes variable.
+
+```{r}
+head(sorted_crimes)
+```
+Here are the 5 highest occurring crimes.
+
+```{r}
+tail(sorted_crimes)
+```
+Here are the 5 lowest occurring crimes.
+
+### How many of the crimes were only attempted?
+
+```{r}
+# Finding number of crimes with "ATTEMPT" in title
+sum(grepl("ATTEMPT", crime$Crm.Cd.Desc, ignore.case = TRUE))
+```
+Out of all the crimes committed, 12,723 of them were attempts.
+
+### How many crimes involved stolen property?
+
+```{r}
+# Finding number of crimes with "STOLEN" in title
+sum(grepl("STOLEN", crime$Crm.Cd.Desc, ignore.case = TRUE))
+```
+Out of all the crimes committed, 98,087 of them involved stolen property.
+
+### Which days had the most amount of crime? The least?
+
+```{r}
+# Sorting dates of crimes based on how many occurred that day
+date_occ_counts <- crime %>% count(DATE.OCC) %>% arrange(desc(n))
+```
+
+```{r}
+head(date_occ_counts)
+```
+The date with the most amount of crime is 12/02/2022 with 1128 instances.
+
+```{r}
+tail(date_occ_counts)
+```
+The date with the least amount of crime is 03/21/2020 with 427 instances. If you noticed, half of the lowest crime occurrence dates is in March 2020, which happens to be when the United States had lock downs for COVID-19.
+
+# Graphing the Data and Conducting Statistical Analysis
+
+### Which areas had the most amount of crime? The least?
+
+```{r}
+area_name_counts <- crime %>% count(AREA.NAME) %>% arrange(desc(n))
+```
+
+```{r}
+ggplot(head(area_name_counts, 7), aes(x = fct_inorder(AREA.NAME), y = n, fill = fct_inorder(AREA.NAME))) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = n), vjust = -0.5) +
+  labs(x = "Area", y = "# of Crimes Comitted", title = "Areas with the Highest Number of Crimes Comitted") +
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "none") +
+  scale_y_continuous(limits = c(0, 60000))
+```
+The area with the highest amount of crime is Central with 53,000 reported cases.
+
+```{r}
+ggplot(tail(area_name_counts, 7), aes(x = fct_inorder(AREA.NAME), y = n, fill = fct_inorder(AREA.NAME))) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = n), vjust = -0.5) +
+  labs(x = "Area", y = "# of Crimes Comitted", title = "Areas with the Lowest Number of Crimes Comitted") +
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "none") +
+  scale_y_continuous(limits = c(0, 40000))
+```
+The area with the lowest amount of crime is Foothill with 26,425 reported cases.
+
+### What premise had a crime occur the most? The least?
+
+```{r}
+premise_counts <- crime %>% count(Premis.Desc) %>% arrange(desc(n))
+```
+
+```{r}
+ggplot(head(premise_counts, 7), aes(x = fct_inorder(Premis.Desc), y = n, fill = fct_inorder(Premis.Desc))) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = n), vjust = -0.5, size = 3) +
+  labs(x = "Premise", y = "# of Crimes", title = "Premise Where Crime Occured the Most") +
+  theme(plot.title = element_text(hjust = 0.5), axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
+  scale_y_continuous(limits = c(0, 220000)) +
+  guides(fill = guide_legend(title = "Legend"))
+```
+The premise where the most crime occurs are streets.
+
+```{r}
+ggplot(tail(premise_counts, 7), aes(x = fct_inorder(Premis.Desc), y = n, fill = fct_inorder(Premis.Desc))) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = n), vjust = -0.5, size = 3) +
+  labs(x = "Premise", y = "# of Crimes", title = "Premise Where Crime Occured the Least") +
+  theme(plot.title = element_text(hjust = 0.5), axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
+  scale_y_continuous(limits = c(0, 2.2)) +
+  guides(fill = guide_legend(title = "Legend"))
+```
+The premise where the least crime occurs are trams/streetcars.
+
+### Show the number of crimes commited per age of victim
+
+```{r}
+crime_per_age <- table(crime$Vict.Age)[5:103] %>% as.data.frame()
+```
+
+```{r}
+ggplot(crime_per_age, aes(x = Var1, y = Freq, fill = Var1)) +
+  geom_bar(stat = "identity") +
+  labs(x = "Age of Victim", y = "# of Crimes", title = "Number of Crimes per Victim Age") +
+  theme(plot.title = element_text(hjust = 0.5), axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 5), legend.position = "none")
+```
+We can see most victims are aged 19-50, where more children and elderly people are less victimized.
+
+```{r}
+# Creating age groups
+crime_per_age$group <- cut(as.numeric(crime_per_age$Var1), breaks = c(0, 12, 17, 24, 39, 59, 120), labels = c("1-12", "13-17", "18-24", "25-39", "40-59", "60-120"))
+
+# Finding age group proportions
+crime_per_age <- crime_per_age %>% group_by(group) %>% mutate(Proportion = Freq / sum(Freq))
+```
+
+```{r}
+ggplot(crime_per_age, aes(x = group, y = Proportion, fill = group)) +
+  geom_violin() +
+  stat_summary(fun = median, geom="point", size=2, color="red") +
+  labs(x = "Age Group", y = "Proportion", title = "Distribution of Crime Proportions by Age Group") + 
+  theme(plot.title = element_text(hjust = 0.5))
+```
+From the violin chart, we can see the age group with the highest number of victims is 13-17. The red dots, representing the median, show  the 13-17 age group takes up about 20% of the data. The lowest proportion group is the 60-120 year old group, likely due to the older individuals having less chance to become victim of a crime and it is skewed. 
+
+```{r}
+ggplot(crime[crime$Vict.Age > 0,], aes(x = Vict.Age)) +
+  geom_boxplot(fill = "green") +
+  labs(x = "Age", title = "Victim Age") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+Median age of victim seems to be around 37 years old with an IQR of approximately 28-50 years old.
+
+### How many crimes occured with a weapon or force?
+
+```{r}
+# Finding number of crimes committed with a weapon
+crime_weapon_na_count <- sum(is.na(crime$Weapon.Used.Cd))
+crime_weapon_count <- 788767 - crime_weapon_na_count
+
+weapons <- data.frame(
+  Weapon = c("Yes", "No"),
+  cc = c(crime_weapon_count, crime_weapon_na_count)
+)
+```
+
+```{r}
+ggplot(weapons, aes(x = Weapon, y = cc, fill = Weapon)) +
+  geom_bar(stat = "identity") +
+  labs(x = "Weapon", y = "Counts", title = "How Many Crimes Were Committed With A Weapon?") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_y_continuous(labels = scales::comma)
+```
+We can see there's about half as many crimes committed with a weapon than without one.
+
+### Is there a difference in the proportion of women who are victim of a crime to men?
+
+```{r}
+male_victims <- subset(crime, Vict.Sex == "M")
+female_victims <- subset(crime, Vict.Sex == "F")
+
+prop.test(
+  x = c(nrow(female_victims), nrow(male_victims)),
+  n = c(788767,788767)
+)
+```
+With a p-value close to 0 and an alpha level of 0.05, we can reject the null hypothesis and state that the true proportion of victims of a crime who are woman or who are men are different.
+
+### Are woman victims of certain crimes more often than men?
+
+```{r warning = FALSE}
+gender_crime <- subset(crime, Vict.Sex == "M" | Vict.Sex == "F")
+
+# Using Chi-Square test of Independence
+chisq.test(table(gender_crime$Vict.Sex, gender_crime$Crm.Cd.Desc))
+```
+With a p-value close to 0 and an alpha level of 0.05, we can reject the null hypothesis, indicating a statistically significant association between gender and crime type on an individual.
+
+### What premise had the most vandalisms? The least?
+
+```{r}
+# Counting number of vandalism reports at each premise
+premise_vandalisms <- crime %>% filter(grepl("VANDALISM", Crm.Cd.Desc, ignore.case = TRUE)) %>% group_by(Premis.Desc) %>% summarize(Count = n()) %>% arrange(desc(Count))
+```
+
+```{r}
+ggplot(head(premise_vandalisms, 10), aes(x = fct_inorder(Premis.Desc), y = Count)) +
+  geom_segment(aes(x = fct_inorder(Premis.Desc), xend = Premis.Desc, y = 0, yend = Count)) +
+  geom_point(color = "orange", size = 4) +
+  coord_flip() +
+  labs(x = "Premise", y = "Count", title = "Most # of Vandalisms at Premises in LA") +
+  theme_light() +
+  theme(axis.text.y = element_text(size = 6), plot.title = element_text(hjust = 0.5), 
+        panel.grid.major.x = element_blank(), panel.border = element_blank(), 
+        plot.margin = margin(c(10,20,10,10), unit = "pt")
+        )
+```
+The premise with the highest number of reported vandalism are vehicles (passenger/trucks).
+
+```{r}
+ggplot(tail(premise_vandalisms, 10), aes(x = fct_inorder(Premis.Desc), y = Count)) +
+  geom_segment(aes(x = fct_inorder(Premis.Desc), xend = Premis.Desc, y = 0, yend = Count)) +
+  geom_point(color = "orange", size = 4) +
+  coord_flip() +
+  labs(x = "Premise", y = "Count", title = "Most # of Vandalisms at Premises in LA") +
+  theme_light() +
+  theme(axis.text.y = element_text(size = 6), plot.title = element_text(hjust = 0.5), 
+        panel.grid.major.x = element_blank(), panel.border = element_blank(), 
+        plot.margin = margin(c(10,20,10,10), unit = "pt")
+        )
+```
+Some MTA lines have the lowest number of vandalisms, with only 1 recorded, as well as a skating rink and tool shed having only 1 instance. In fact, there's many more which only have 1 reported vandalism.
+
+### What percent of crimes are still being investigated?
+
+```{r}
+sum(grepl("Cont", crime$Status.Desc, ignore.case = TRUE)) / nrow(crime)
+```
+80.05% of crimes are still being investigated.
+
+### Are certain ethnic groups victims of crimes more often than others?
+
+```{r}
+descent_table <- table(crime$Vict.Descent)[3:21]
+prob = rep(1/length(descent_table), length(descent_table))
+
+chisq.test(descent_table, p = prob)
+```
+With a p-value is close to 0, and alpha = 0.5, we can reject the null and state that ethnic groups are not equally as likely to be targeted for a crime.
+
+### Are there any seasons where crime is more frequent? Less frequent?
+
+```{r}
+# Grouping the date and number of crimes
+daily_crime <- crime %>% group_by(DATE.OCC) %>% summarize(Count = n())
+```
+
+```{r}
+  ggplot(daily_crime, aes(x = DATE.OCC, y = Count)) +
+    geom_line() +
+    facet_wrap(~ year(DATE.OCC), ncol = 2, nrow = 2, scales = "free") +
+    labs(x = "Time", title = "Crime over Time") +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    scale_x_date(date_breaks = "1 month", date_labels = "%b")
+```
+It seems like the beginning of each month there's a spike in crime where the biggest spike is in January.
+
+### Is there a certain month that has more crime yearly than others?
+
+If we take a look at crime from the graph above, we can see that there's not really a specific month that generally has more or less crime than others.
+
+### Has crime increased over time in any area?
+
+```{r}
+# Grouping the top 12 areas by date and number of crimes
+selected <- area_name_counts[1:12,1]
+filtered_crime <- crime %>% filter(AREA.NAME %in% selected)
+crime_time_area <- filtered_crime %>% group_by(DATE.OCC, AREA.NAME) %>% summarize(Count = n())
+```
+
+```{r}
+  ggplot(crime_time_area, aes(x = DATE.OCC, y = Count)) +
+    geom_line() +
+    facet_wrap(~ AREA.NAME, scales = "free") +
+    labs(x = "Time", title = "Crime over Time") +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    stat_smooth(method = "lm")
+```
+No area seems to have a significant increase in crime over time, but some areas like Central, Newton, Olympic, Pacific, and West LA do have some increase in crime. The areas all seem to have some major spikes in crime on certain days, but nothing that overlaps with each other.
+
+### Are there certain times of the day where crime occurs more? What about day vs night?
+
+```{r}
+# Convert military time to hours and minutes
+hours <- as.numeric(substr(crime$TIME.OCC, 1, 2))
+minutes <- as.numeric(substr(crime$TIME.OCC, 4, 5))
+
+# Calculate the intervals
+interval <- sprintf("%02d:%02d", floor((hours * 60 + minutes) %/% 30 / 2), ((hours * 60 + minutes) %/% 30 %% 2) * 30)
+interval_df <- as.data.frame(table(interval))
+
+number_of_bar <- nrow(interval_df)
+angle <- 90 - 360 * (as.numeric(interval_df$interval) - 0.5) / number_of_bar
+
+interval_df$angle<-ifelse(angle < -90, angle + 180, angle)
+```
+
+```{r}
+# Plot of crime frequency per 30 minutes
+ggplot(interval_df, aes(x = as.factor(interval), y = Freq, fill = Freq)) +
+  geom_bar(stat = "identity", alpha = 0.7) +
+  geom_text(aes(x = interval, y = Freq, label = interval, hjust = 0), 
+            color = "black", fontface = "bold", alpha = 0.6, size = 2, angle = angle, 
+            inherit.aes = FALSE) +
+  scale_fill_gradient(low = "green", high = "red") +
+  theme_minimal() +
+  theme(
+    axis.text = element_blank(),
+    panel.grid = element_blank(),
+    axis.title = element_blank(),
+    plot.margin = unit(rep(-0.5, 4), "cm")
+  ) +
+  coord_polar(start = 0) +
+  scale_y_continuous(limits = c(-30000, 40000))
+```
+We can see that as the time of day increases, the frequency of crime increases, but there is a major spike at noon (12:00).
